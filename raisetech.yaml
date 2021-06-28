@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Here are some details about the template. First learn CloudFormation
+
+Resources:
+# ------------------------------ #
+# VPC
+# ------------------------------ #
+  # 論理名
+  cfVPC:
+    # 物理名
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - key: Name
+        - Value: cf-raisetech-VPC
+# ------------------------------ #
+# Subnet
+# ------------------------------ #
+  PublicSubnetAZ1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'ap-northeast-1a'
+      CidrBlock: 10.0.10.0/24
+      Tags:
+        - key: Name
+        - Value: cf-public-subnet-1a
+      VpcId:
+        Ref: cfVPC
+  PrivateSubnetAZ1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'ap-northeast-1a'
+      CidrBlock: 10.0.20.0/24
+      Tags:
+        - key: Name
+        - Value: cf-private-subnet-1a
+      VpcId:
+        Ref: cfVPC
+# ------------------------------ #
+# IGW
+# ------------------------------ #
+  cfIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - key: Name
+      - Value: cf-igw
+# ------------------------------ #
+# VPCGatewayAttachment
+# ------------------------------ #
+  cfIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: cfIGW
+      VpcId: cfVPC
+# ------------------------------ #
+# RouteTable
+# ------------------------------ #
+  cfRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: cfVPC
+      Tags:
+      - key: Name
+      - Value: cf-routetable
+# ------------------------------ #
+# Route
+# ------------------------------ #
+  cfRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: cfRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
