@@ -1,77 +1,102 @@
 AWSTemplateFormatVersion: "2010-09-09"
-
 Description: Here are some details about the template. First learn CloudFormation
 
 Resources:
-# ------------------------------ #
+# -------------------------------------------------- #
 # VPC
-# ------------------------------ #
-  # 論理名
+# -------------------------------------------------- #
   cfVPC:
-    # 物理名
-    Type: "AWS::EC2::VPC"
+    Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
       Tags:
-        - key: Name
-        - Value: cf-raisetech-VPC
-# ------------------------------ #
+        - Key: Name
+          Value: cf-raisetech-VPC
+# -------------------------------------------------- #
 # Subnet
-# ------------------------------ #
+# -------------------------------------------------- #
+  # Public
   PublicSubnetAZ1:
-    Type: "AWS::EC2::Subnet"
+    Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: 'ap-northeast-1a'
+      AvailabilityZone: "ap-northeast-1a"
       CidrBlock: 10.0.10.0/24
       Tags:
-        - key: Name
-        - Value: cf-public-subnet-1a
-      VpcId:
-        Ref: cfVPC
+        - Key: Name
+          Value: cf-public-subnet-1a
+      VpcId: !Ref cfVPC
+  # Private
   PrivateSubnetAZ1:
-    Type: "AWS::EC2::Subnet"
+    Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: 'ap-northeast-1a'
+      AvailabilityZone: "ap-northeast-1a"
       CidrBlock: 10.0.20.0/24
       Tags:
-        - key: Name
-        - Value: cf-private-subnet-1a
-      VpcId:
-        Ref: cfVPC
-# ------------------------------ #
+        - Key: Name
+          Value: cf-private-subnet-1a
+      VpcId: !Ref cfVPC
+# -------------------------------------------------- #
 # IGW
-# ------------------------------ #
+# -------------------------------------------------- #
   cfIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-      - key: Name
-      - Value: cf-igw
-# ------------------------------ #
-# VPCGatewayAttachment
-# ------------------------------ #
+        - Key: Name
+          Value: cf-igw
+# -------------------------------------------------- #
+# VPC-Gateway-Attachment
+# -------------------------------------------------- #
   cfIGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: cfIGW
-      VpcId: cfVPC
-# ------------------------------ #
+      VpcId: !Ref cfVPC
+      InternetGatewayId: !Ref cfIGW
+# -------------------------------------------------- #
 # RouteTable
-# ------------------------------ #
+# -------------------------------------------------- #
   cfRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId:
-        Ref: cfVPC
+      VpcId: !Ref cfVPC
       Tags:
-      - key: Name
-      - Value: cf-routetable
-# ------------------------------ #
+        - Key: Name
+          Value: cf-routetable
+# -------------------------------------------------- #
 # Route
-# ------------------------------ #
+# -------------------------------------------------- #
   cfRoute:
     Type: AWS::EC2::Route
+    DependsOn: cfIGW
     Properties:
-      RouteTableId:
-        Ref: cfRouteTable
+      RouteTableId: !Ref cfRouteTable
       DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref cfIGW
+# -------------------------------------------------- #
+# Subnet-RouteTable-Association
+# -------------------------------------------------- #
+  cfSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ1
+      RouteTableId: !Ref cfRouteTable
+# -------------------------------------------------- #
+# SecurityGroup
+# -------------------------------------------------- #
+  cfSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh,http
+      VpcId: !Ref cfVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+# -------------------------------------------------- #
+# EC2Instance
+# -------------------------------------------------- #
