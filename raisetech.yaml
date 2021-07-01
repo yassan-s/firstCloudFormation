@@ -1,5 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Here are some details about the template. First learn CloudFormation
+Description: First learn CloudFormation
+
+Parameters:
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
 
 Resources:
 # -------------------------------------------------- #
@@ -100,3 +105,23 @@ Resources:
 # -------------------------------------------------- #
 # EC2Instance
 # -------------------------------------------------- #
+  cfEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-06631ebafb3ae5d34
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref PublicSubnetAZ1
+          GroupSet:
+            - !Ref cfSecurityGroup
+      Tags:
+          - Key: Name
+            Value: cf-EC2
+
+Outputs:
+  EC2PublicIP:
+    Value: !GetAtt cfEC2.PublicIp
+    Description: Public IP of EC2 instance
