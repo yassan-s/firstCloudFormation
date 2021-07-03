@@ -1,11 +1,16 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: First learn CloudFormation
-
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------#
 Parameters:
   KeyName:
     Description: The EC2 Key Pair to allow SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
 
+# ------------------------------------------------------------#
+# Resources
+# ------------------------------------------------------------#
 Resources:
 # -------------------------------------------------- #
 # VPC
@@ -24,21 +29,31 @@ Resources:
   PublicSubnetAZ1:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: "ap-northeast-1a"
+      AvailabilityZone: ap-northeast-1a
       CidrBlock: 10.0.10.0/24
       Tags:
         - Key: Name
           Value: cf-public-subnet-1a
       VpcId: !Ref cfVPC
-  # Private
+  # Private AZ1a
   PrivateSubnetAZ1:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: "ap-northeast-1a"
+      AvailabilityZone: ap-northeast-1a
       CidrBlock: 10.0.20.0/24
       Tags:
         - Key: Name
           Value: cf-private-subnet-1a
+      VpcId: !Ref cfVPC
+  # Private AZ1c
+  PrivateSubnetAZ1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: 10.0.30.0/24
+      Tags:
+        - Key: Name
+          Value: cf-private-subnet-1c
       VpcId: !Ref cfVPC
 # -------------------------------------------------- #
 # IGW
@@ -85,8 +100,9 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnetAZ1
       RouteTableId: !Ref cfRouteTable
+
 # -------------------------------------------------- #
-# SecurityGroup
+# EC2-SecurityGroup
 # -------------------------------------------------- #
   cfSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -111,17 +127,88 @@ Resources:
       ImageId: ami-06631ebafb3ae5d34
       InstanceType: t2.micro
       KeyName: !Ref KeyName
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda
+        Ebs:
+          VolumeSize: 10
+          VolumeType: gp2
       NetworkInterfaces:
         - AssociatePublicIpAddress: "true"
           DeviceIndex: "0"
           SubnetId: !Ref PublicSubnetAZ1
           GroupSet:
             - !Ref cfSecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum install -y git
+          yum install -y mysql
       Tags:
           - Key: Name
             Value: cf-EC2
 
+# -------------------------------------------------- #
+# DBSubnetGroup
+# -------------------------------------------------- #
+  cfDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: PrivateSubnet 1a and 1c
+      SubnetIds:
+        - !Ref PrivateSubnetAZ1
+        - !Ref PrivateSubnetAZ1c
+# -------------------------------------------------- #
+# DBParameterGroup
+# -------------------------------------------------- #
+  cfDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: CloudFormation paramter group
+      Family: MySQL8.0
+      Parameters:
+        character_set_database: utf8mb4
+        character_set_client: utf8mb4
+        character_set_connection: utf8mb4
+        character_set_results: utf8mb4
+        character_set_server: utf8mb4
+# -------------------------------------------------- #
+# DBInstance
+# -------------------------------------------------- #
+  cfDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t2.micro
+      DBParameterGroupName: !Ref cfDBParameterGroup
+      DBSubnetGroupName: !Ref cfDBSubnetGroup
+      DBSecurityGroups:
+        -  !Ref cfDBSecurityGroup
+      Engine: MySQL
+      EngineVersion: 8.0.20
+      MasterUsername: admin
+      MasterUserPassword: admin1234
+      StorageType: gp2
+# ------------------------------------------------------------#
+#  RDS-SecurityGroup MySQL
+# ------------------------------------------------------------#
+  cfDBSecurityGroup:
+    Type: AWS::RDS::DBSecurityGroup
+    Properties:
+      GroupDescription: DBSecurityGroup
+      DBSecurityGroupIngress:
+        -
+          EC2SecurityGroupId: !Ref cfSecurityGroup
+      EC2VpcId: !Ref cfVPC
+
+
+
+# ------------------------------------------------------------#
+# Outputs
+# ------------------------------------------------------------#
 Outputs:
   EC2PublicIP:
     Value: !GetAtt cfEC2.PublicIp
     Description: Public IP of EC2 instance
+  DBEndpoint:
+    Value: !GetAtt cfDBInstance.Endpoint.Address
+    Description: Endpoint of DB instance
