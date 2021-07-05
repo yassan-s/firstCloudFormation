@@ -8,7 +8,7 @@ Parameters:
     Description: The EC2 Key Pair to allow SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
   DBUsername:
-    NoEcho: 'true'
+    NoEcho: 'false'
     Description: Username for MySQL database access
     Type: String
     MinLength: '4'
@@ -16,7 +16,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
   DBPassword:
-    NoEcho: 'true'
+    NoEcho: 'false'
     Description: Password MySQL database access
     Type: String
     MinLength: '8'
@@ -41,7 +41,7 @@ Resources:
 # -------------------------------------------------- #
 # Subnet
 # -------------------------------------------------- #
-  # Public
+  # Public AZ1a
   PublicSubnetAZ1a:
     Type: AWS::EC2::Subnet
     Properties:
@@ -62,11 +62,21 @@ Resources:
           Value: cf-private-subnet-1a
       VpcId: !Ref cfVPC
   # Private AZ1c
-  PrivateSubnetAZ1c:
+  PublicSubnetAZ1c:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: ap-northeast-1c
       CidrBlock: 10.0.30.0/24
+      Tags:
+        - Key: Name
+          Value: cf-public-subnet-1c
+      VpcId: !Ref cfVPC
+  # Private AZ1c
+  PrivateSubnetAZ1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: 10.0.40.0/24
       Tags:
         - Key: Name
           Value: cf-private-subnet-1c
@@ -194,12 +204,12 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBName: cfDB
-      AllocatedStorage: "30"
+      AllocatedStorage: "25"
       DBInstanceClass: db.t2.micro
       DBParameterGroupName: !Ref cfDBParameterGroup
       DBSubnetGroupName: !Ref cfDBSubnetGroup
       DBSecurityGroups:
-        -  !Ref cfDBSecurityGroup
+        -  !Ref cfDBSG
       MultiAZ: "true"
       Engine: MySQL
       EngineVersion: 8.0.20
@@ -209,7 +219,7 @@ Resources:
 # ------------------------------------------------------------#
 #  RDS-SecurityGroup MySQL
 # ------------------------------------------------------------#
-  cfDBSecurityGroup:
+  cfDBSG:
     Type: AWS::RDS::DBSecurityGroup
     Properties:
       GroupDescription: DBSecurityGroup
@@ -218,6 +228,42 @@ Resources:
           EC2SecurityGroupId: !Ref cfSecurityGroup
       EC2VpcId: !Ref cfVPC
 
+# ------------------------------------------------------------#
+#  ElasticLoadBalancingV2 ALB
+# ------------------------------------------------------------#
+  cfALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      IpAddressType: ipv4
+      Name: cfALB
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref cfALBSG
+      Subnets:
+        - !Ref PublicSubnetAZ1a
+        - !Ref PublicSubnetAZ1c
+      Tags:
+        - Key: Name
+          Value: cfALB
+# ------------------------------------------------------------#
+#  ALB-SecurityGroup
+# ------------------------------------------------------------#
+  cfALBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: cfALB-SG
+      GroupDescription: Allow http
+      VpcId: !Ref cfVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 3000
+        ToPort: 3000
+        CidrIp: 0.0.0.0/0
 
 # ------------------------------------------------------------#
 # Outputs
@@ -229,3 +275,6 @@ Outputs:
   DBEndpoint:
     Value: !GetAtt cfDBInstance.Endpoint.Address
     Description: Endpoint of DB instance
+  ALBDNS:
+    Description: Public DNS Name
+    Value: !GetAtt cfALB.DNSName
