@@ -24,6 +24,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z0-9]*'
     ConstraintDescription: must contain only alphanumeric characters.
 
+
 # ------------------------------------------------------------#
 # Resources
 # ------------------------------------------------------------#
@@ -61,7 +62,7 @@ Resources:
         - Key: Name
           Value: cf-private-subnet-1a
       VpcId: !Ref cfVPC
-  # Private AZ1c
+  # Public AZ1c
   PublicSubnetAZ1c:
     Type: AWS::EC2::Subnet
     Properties:
@@ -111,7 +112,7 @@ Resources:
 # -------------------------------------------------- #
 # Route
 # -------------------------------------------------- #
-  cfRoute:
+  cfPublicSubnetRoute:
     Type: AWS::EC2::Route
     DependsOn: cfIGW
     Properties:
@@ -126,6 +127,7 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnetAZ1a
       RouteTableId: !Ref cfRouteTable
+
 
 # -------------------------------------------------- #
 # EC2-SecurityGroup
@@ -169,9 +171,12 @@ Resources:
           #!/bin/bash
           yum install -y git
           yum install -y mysql
+          yum install -y httpd
+          service httpd start
       Tags:
           - Key: Name
             Value: cf-EC2
+
 
 # -------------------------------------------------- #
 # DBSubnetGroup
@@ -217,7 +222,7 @@ Resources:
       MasterUserPassword: !Ref DBPassword
       StorageType: gp2
 # ------------------------------------------------------------#
-#  RDS-SecurityGroup MySQL
+#  DB-SecurityGroup MySQL
 # ------------------------------------------------------------#
   cfDBSG:
     Type: AWS::RDS::DBSecurityGroup
@@ -228,8 +233,9 @@ Resources:
           EC2SecurityGroupId: !Ref cfSecurityGroup
       EC2VpcId: !Ref cfVPC
 
+
 # ------------------------------------------------------------#
-#  ElasticLoadBalancingV2 ALB
+#  EBSV2 ALB
 # ------------------------------------------------------------#
   cfALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -256,14 +262,47 @@ Resources:
       GroupDescription: Allow http
       VpcId: !Ref cfVPC
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 3000
-        ToPort: 3000
-        CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+# ------------------------------------------------------------#
+#  ALB-TargetGroup
+# ------------------------------------------------------------#
+  cfALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200
+      Name: cfALBTargetGroup
+      Port: 80
+      Protocol: HTTP
+      Targets:
+      - Id: !Ref cfEC2
+        Port: 80
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref cfVPC
+# ------------------------------------------------------------#
+#  ALB-Listener
+# ------------------------------------------------------------#
+  cfHTTPlistener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref cfALBTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref cfALB
+      Port: 80
+      Protocol: HTTP
 
 # ------------------------------------------------------------#
 # Outputs
@@ -276,5 +315,5 @@ Outputs:
     Value: !GetAtt cfDBInstance.Endpoint.Address
     Description: Endpoint of DB instance
   ALBDNS:
-    Description: Public DNS Name
     Value: !GetAtt cfALB.DNSName
+    Description: Public DNS Name
