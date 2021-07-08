@@ -249,13 +249,6 @@ Resources:
       Subnets:
         - !Ref PublicSubnetAZ1a
         - !Ref PublicSubnetAZ1c
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: true
-        - Key: access_logs.s3.bucket
-          Value: !Ref 'S3BucketLogs'
-        - Key: access_logs.s3.prefix
-          Value: !Sub 'nlb/${AWS::StackName}'
       Tags:
         - Key: Name
           Value: cfALB
