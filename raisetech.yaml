@@ -8,19 +8,19 @@ Parameters:
     Description: The EC2 Key Pair to allow SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
   DBUsername:
-    NoEcho: 'false'
+    NoEcho: false
     Description: Username for MySQL database access
     Type: String
-    MinLength: '4'
-    MaxLength: '16'
+    MinLength: 4
+    MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
   DBPassword:
-    NoEcho: 'false'
+    NoEcho: false
     Description: Password MySQL database access
     Type: String
-    MinLength: '8'
-    MaxLength: '41'
+    MinLength: 8
+    MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9]*'
     ConstraintDescription: must contain only alphanumeric characters.
 
@@ -161,8 +161,8 @@ Resources:
           VolumeSize: 10
           VolumeType: gp2
       NetworkInterfaces:
-        - AssociatePublicIpAddress: "true"
-          DeviceIndex: "0"
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
           SubnetId: !Ref PublicSubnetAZ1a
           GroupSet:
             - !Ref cfSecurityGroup
@@ -209,21 +209,21 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBName: cfDB
-      AllocatedStorage: "25"
+      AllocatedStorage: 25
       DBInstanceClass: db.t2.micro
       DBParameterGroupName: !Ref cfDBParameterGroup
       DBSubnetGroupName: !Ref cfDBSubnetGroup
       DBSecurityGroups:
         -  !Ref cfDBSG
-      MultiAZ: "true"
+      MultiAZ: true
       Engine: MySQL
       EngineVersion: 8.0.20
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       StorageType: gp2
-# ------------------------------------------------------------#
-#  DB-SecurityGroup MySQL
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
+# DB-SecurityGroup MySQL
+# -------------------------------------------------- #
   cfDBSG:
     Type: AWS::RDS::DBSecurityGroup
     Properties:
@@ -234,9 +234,9 @@ Resources:
       EC2VpcId: !Ref cfVPC
 
 
-# ------------------------------------------------------------#
-#  EBSV2 ALB
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
+# EBSV2 ALB
+# -------------------------------------------------- #
   cfALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -249,12 +249,17 @@ Resources:
       Subnets:
         - !Ref PublicSubnetAZ1a
         - !Ref PublicSubnetAZ1c
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: true
+        - Key: access_logs.s3.bucket
+          Value: !Ref cfALBlogBucket
       Tags:
         - Key: Name
           Value: cfALB
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
 #  ALB-SecurityGroup
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
   cfALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -270,9 +275,9 @@ Resources:
           FromPort: 3000
           ToPort: 3000
           CidrIp: 0.0.0.0/0
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
 #  ALB-TargetGroup
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
   cfALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -291,9 +296,9 @@ Resources:
         Port: 80
       UnhealthyThresholdCount: 3
       VpcId: !Ref cfVPC
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
 #  ALB-Listener
-# ------------------------------------------------------------#
+# -------------------------------------------------- #
   cfHTTPlistener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -303,6 +308,69 @@ Resources:
       LoadBalancerArn: !Ref cfALB
       Port: 80
       Protocol: HTTP
+
+
+# -------------------------------------------------- #
+# S3 Bucket
+# -------------------------------------------------- #
+  cfALBlogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: alb-accesslogs-raisetech
+      LifecycleConfiguration:
+        Rules:
+          # 14 days delete
+          - Id: AutoDelete
+            Status: Enabled # Rule apply
+            ExpirationInDays: 7
+          - Id: NoncurrentVersionExpiration
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 4
+      # access control
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # version management
+      VersioningConfiguration:
+        Status: Enabled
+# -------------------------------------------------- #
+# S3 BucketPolicy
+# -------------------------------------------------- #
+  cfALBlogsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref cfALBlogBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AlbWriteAccess
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::582318560864:root
+            # Adds an object to a bucket
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${cfALBlogBucket}/AWSLogs/*
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:aws:s3:::${cfALBlogBucket}/*
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Action:
+              - s3:GetBucketAcl
+            Resource:
+              - !Sub arn:aws:s3:::${cfALBlogBucket}
+            Principal:
+              Service: delivery.logs.amazonaws.com
 
 
 # ------------------------------------------------------------#
