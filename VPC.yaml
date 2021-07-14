@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Here are some details about the template. First learn CloudFormation
+
+# ------------------------------------------------------------#
+# Resources
+# ------------------------------------------------------------#
+Resources:
+# ------------------------------ #
+# VPC
+# ------------------------------ #
+  cfVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: cf-raisetech-VPC
+# ------------------------------ #
+# Subnet
+# ------------------------------ #
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref cfVPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+        - Key: Name
+          Value: cf-public-subnet-1a
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref cfVPC
+      CidrBlock: 10.0.20.0/24
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+        - Key: Name
+          Value: cf-private-subnet-1a
+# ------------------------------ #
+# IGW
+# ------------------------------ #
+  cfIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: cf-igw
+# ------------------------------ #
+# VPC-Gateway-Attachment
+# ------------------------------ #
+  cfIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref cfVPC
+      InternetGatewayId: !Ref cfIGW
