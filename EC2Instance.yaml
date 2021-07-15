@@ -1,6 +1,15 @@
-AWSTemplateFormatVersion: 2010-09-09
+AWSTemplateFormatVersion: "2010-09-09"
 
-Description: VPC only template.
+Description: VPC + EC2Instance
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------#
+Parameters:
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+
 
 # ------------------------------------------------------------#
 # Resources
@@ -19,7 +28,7 @@ Resources:
 # -------------------------------------------------- #
 # Subnet
 # -------------------------------------------------- #
-  PublicSubnetAZ1:
+  PublicSubnetAZ1a:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref cfVPC
@@ -28,7 +37,7 @@ Resources:
       Tags:
         - Key: Name
           Value: cf-public-subnet-1a
-  PrivateSubnetAZ1:
+  PrivateSubnetAZ1a:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref cfVPC
@@ -82,3 +91,63 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnetAZ1a
       RouteTableId: !Ref cfRouteTable
+
+
+# -------------------------------------------------- #
+# EC2-SecurityGroup
+# -------------------------------------------------- #
+  cfEc2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh,http
+      VpcId: !Ref cfVPC
+      SecurityGroupIngress:
+      - Description: Allow ssh
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - Description: Allow ssh
+        IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+# -------------------------------------------------- #
+# EC2Instance
+# -------------------------------------------------- #
+  cfEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-06631ebafb3ae5d34
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda
+        Ebs:
+          VolumeSize: 10
+          VolumeType: gp2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnetAZ1a
+          GroupSet:
+            - !Ref cfEc2SecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum install -y git
+          yum install -y mysql
+          yum install -y httpd
+          service httpd start
+      Tags:
+          - Key: Name
+            Value: cf-EC2
+
+
+# ------------------------------------------------------------#
+# Outputs
+# ------------------------------------------------------------#
+Outputs:
+  EC2PublicIP:
+    Value: !GetAtt cfEC2.PublicIp
+    Description: Public IP of EC2 instance
